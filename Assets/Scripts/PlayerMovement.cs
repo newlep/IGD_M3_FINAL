@@ -23,6 +23,9 @@ public class PlayerMovement : MonoBehaviour
     public TextMeshProUGUI scoreText; // Reference to the ScoreText
     private float startZ; // Starting Z position of the player
 
+    public AudioClip boostSound; // Sound effect for boost
+    private AudioSource audioSource; // AudioSource for playing sounds
+
     void Start()
     {
         // Initialize camera and starting position
@@ -39,6 +42,13 @@ public class PlayerMovement : MonoBehaviour
         if (scoreText == null)
         {
             Debug.LogError("ScoreText is not assigned in the Inspector!");
+        }
+
+        // Setup AudioSource
+        audioSource = GetComponent<AudioSource>();
+        if (audioSource == null)
+        {
+            audioSource = gameObject.AddComponent<AudioSource>();
         }
     }
 
@@ -79,31 +89,44 @@ public class PlayerMovement : MonoBehaviour
         UpdateScore();
     }
 
-void OnCollisionEnter(Collision collision)
+    void OnCollisionEnter(Collision collision)
+    {
+        if (collision.gameObject.CompareTag("Obstacle"))
+        {
+            // Save the score before loading the Game Over Scene
+            float finalScore = transform.position.z - startZ;
+            PlayerPrefs.SetFloat("FinalScore", finalScore);
+
+            // Transition to the Game Over Scene
+            SceneManager.LoadScene("Lose");
+            forwardSpeed = 0; // Stop the player
+        }
+    }
+
+   IEnumerator SpeedBoost()
 {
-    if (collision.gameObject.CompareTag("Obstacle"))
-    {
-        // Save the score before loading the Game Over Scene
-        float finalScore = transform.position.z - startZ;
-        PlayerPrefs.SetFloat("FinalScore", finalScore);
+    isBoosting = true; // Set boosting flag
+    forwardSpeed *= speedBoostMultiplier; // Temporarily increase speed
 
-        // Transition to the Game Over Scene
-        SceneManager.LoadScene("Lose");
-        forwardSpeed = 0; // Stop the player
+    // Play the boost sound effect
+    if (boostSound != null && audioSource != null)
+    {
+        audioSource.clip = boostSound;
+        audioSource.loop = false; // Ensure it doesn't loop
+        audioSource.Play();
     }
+
+    yield return new WaitForSeconds(speedBoostDuration); // Wait for the boost duration
+
+    // Stop the sound when the boost is over
+    if (audioSource.isPlaying && audioSource.clip == boostSound)
+    {
+        audioSource.Stop();
+    }
+
+    forwardSpeed /= speedBoostMultiplier; // Reset speed to normal
+    isBoosting = false; // Clear boosting flag
 }
-
-
-    IEnumerator SpeedBoost()
-    {
-        isBoosting = true; // Set boosting flag
-        forwardSpeed *= speedBoostMultiplier; // Temporarily increase speed
-
-        yield return new WaitForSeconds(speedBoostDuration); // Wait for the boost duration
-
-        forwardSpeed /= speedBoostMultiplier; // Reset speed to normal
-        isBoosting = false; // Clear boosting flag
-    }
 
     void UpdateScore()
     {
