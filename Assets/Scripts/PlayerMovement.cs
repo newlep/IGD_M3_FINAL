@@ -1,16 +1,46 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using TMPro; // Required for TextMeshPro
 
 public class PlayerMovement : MonoBehaviour
 {
     public float laneDistance = 3f; // Distance between lanes
     private int targetLane = 1; // 0 = Left, 1 = Middle, 2 = Right
-    public float forwardSpeed = 5f; // Initial speed
-    public float speedIncreaseAmount = 1f; // Amount to increase speed
-    public float speedIncreaseInterval = 10f; // Time in seconds to increase speed
+    public float forwardSpeed = 5f; // Normal base speed
+    public float speedIncreaseAmount = 1f; // Amount to increase speed every 5 seconds
+    public float speedIncreaseInterval = 5f; // Time in seconds for base speed increase
+    public float speedBoostMultiplier = 2f; // Multiplier for speed boost
+    public float speedBoostDuration = 1f; // Duration of the boost in seconds
     private float speedIncreaseTimer = 0f; // Timer to track speed increase intervals
+    private bool isBoosting = false; // Tracks if the player is currently boosted
+
+    public Camera mainCamera; // Reference to the main camera
+    public float normalFOV = 60f; // Normal field of view
+    public float boostFOV = 80f; // Field of view during speed boost
+    public float fovTransitionSpeed = 5f; // Speed of FOV transition
+
+    public TextMeshProUGUI scoreText; // Reference to the ScoreText
+    private float startZ; // Starting Z position of the player
+
+    void Start()
+    {
+        // Initialize camera and starting position
+        if (mainCamera == null)
+        {
+            mainCamera = Camera.main;
+        }
+        mainCamera.fieldOfView = normalFOV;
+
+        // Record the starting Z position
+        startZ = transform.position.z;
+
+        // Ensure the scoreText is assigned
+        if (scoreText == null)
+        {
+            Debug.LogError("ScoreText is not assigned in the Inspector!");
+        }
+    }
 
     void Update()
     {
@@ -27,21 +57,60 @@ public class PlayerMovement : MonoBehaviour
         Vector3 targetPosition = new Vector3((targetLane - 1) * laneDistance, transform.position.y, transform.position.z);
         transform.position = Vector3.Lerp(transform.position, targetPosition, Time.deltaTime * 10);
 
-        // Increase speed at regular intervals
+        // Handle base speed increase
         speedIncreaseTimer += Time.deltaTime;
         if (speedIncreaseTimer >= speedIncreaseInterval)
         {
-            forwardSpeed += speedIncreaseAmount;
+            forwardSpeed += speedIncreaseAmount; // Increase the base speed
             speedIncreaseTimer = 0f; // Reset the timer
         }
+
+        // Check for speed boost input
+        if (Input.GetKeyDown(KeyCode.Space) && !isBoosting)
+        {
+            StartCoroutine(SpeedBoost());
+        }
+
+        // Smoothly transition the camera FOV
+        float targetFOV = isBoosting ? boostFOV : normalFOV;
+        mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, targetFOV, Time.deltaTime * fovTransitionSpeed);
+
+        // Update the score
+        UpdateScore();
     }
 
-     void OnCollisionEnter(Collision collision)
+void OnCollisionEnter(Collision collision)
+{
+    if (collision.gameObject.CompareTag("Obstacle"))
     {
-        if (collision.gameObject.CompareTag("Obstacle"))
-        {
-            Debug.Log("Game Over!");
-            SceneManager.LoadScene("Lose"); // Replace with your Game Over Scene name
-        }
+        // Save the score before loading the Game Over Scene
+        float finalScore = transform.position.z - startZ;
+        PlayerPrefs.SetFloat("FinalScore", finalScore);
+
+        // Transition to the Game Over Scene
+        SceneManager.LoadScene("Lose");
+        forwardSpeed = 0; // Stop the player
+    }
+}
+
+
+    IEnumerator SpeedBoost()
+    {
+        isBoosting = true; // Set boosting flag
+        forwardSpeed *= speedBoostMultiplier; // Temporarily increase speed
+
+        yield return new WaitForSeconds(speedBoostDuration); // Wait for the boost duration
+
+        forwardSpeed /= speedBoostMultiplier; // Reset speed to normal
+        isBoosting = false; // Clear boosting flag
+    }
+
+    void UpdateScore()
+    {
+        // Calculate distance traveled
+        float distance = transform.position.z - startZ;
+
+        // Update the score text
+        scoreText.text = "Score: " + Mathf.FloorToInt(distance).ToString();
     }
 }
